@@ -1,3 +1,14 @@
+'''
+本篇内容为使用多层感知器实现图像识别，具体的内容有如下几部分
+1.加载数据
+2.定义模型
+3.定义损失函数
+4.定义优化器
+5.训练模型
+6.评估模型
+
+'''
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -45,11 +56,11 @@ class MLP(nn.Module):
 '''
 #第二种方式
 #代码量少，但是不够灵活
-model = nn.Sequential(
-    nn.Linear(784, 30), nn.Sigmoid(),
-    nn.Linear( 30, 20), nn.Sigmoid(),
-    nn.Linear( 20, 10)
-)
+# model = nn.Sequential(
+#     nn.Linear(784, 30), nn.Sigmoid(),
+#     nn.Linear( 30, 20), nn.Sigmoid(),
+#     nn.Linear( 20, 10)
+# )
   
 #如何评估模型，借助评估的过程，验证模型建立的代码是没有问题的
 #评估模型的过程 是使用若干个批次的数据，然后计算模型的输出和标签之间的差距
@@ -100,12 +111,72 @@ def _loss(model, dataloader):
 
 def estimate_loss(model):
     re = {}
+    #将模型切换为评估模式
+    #在评估模式下，有些函数会不可用，比如随机失活
+    model.eval()
     re['train'] = _loss(model, train_loader)
     re['val'] = _loss(model, val_loader)
     re['test'] = _loss(model, test_loader)
+    #评估完成后，需要切换回训练模式
+    model.train()
     return re
 
 
-print(estimate_loss(model))
+#print(estimate_loss(model))
 
+#定义训练模型的函数
+def train_model(model, optimizer, epochs=10):
+    lossi = []
+    #epochs 表示训练模型的次数, 每次使用全部数据训练一次为一轮
+    for e in range(epochs):
+        for data in train_loader:
+            inputs, labels = data
+            B, C, H, W = inputs.shape
+            logits = model(inputs.view(B, -1))
+            loss = F.cross_entropy(logits, labels)
+            lossi.append(loss.item())
+            optimizer.zero_grad() #梯度清零
+            loss.backward() #反向传播，计算梯度
+            optimizer.step()#获得梯度后，使用优化器更新模型参数
+        states = estimate_loss(model)
+        train_loss = f"{states['train']['loss']:.3f}"
+        #train_loss = f'{states['train']['loss']:.3f}'
+        #f-string 要使用双引号，才能用[]，否则会报错，因为f-string中的{}是用来表示变量的
+        val_loss = f"{states['val']['loss']:.3f}"
+        test_loss = f"{states['test']['loss']:.3f}"        
+        print(f"epoch {e} train {train_loss} val {val_loss} test {test_loss}")
+    return lossi
+
+loss = {}
+#定义模型
+#sequential 使用小括号建立，而不用花括号
+
+model_sigmoid = nn.Sequential(
+    nn.Linear(784, 30), nn.Sigmoid(),
+    nn.Linear( 30, 20), nn.Sigmoid(),
+    nn.Linear( 20, 10)
+)
+
+model_relu = nn.Sequential(
+    nn.Linear(784, 30), nn.ReLU(),
+    nn.Linear( 30, 20), nn.ReLU(),
+    nn.Linear( 20, 10)
+)
+#定义优化器 并进行训练
+#loss['mlp_sigmoid'] = train_model(model_sigmoid, optim.SGD(model_sigmoid.parameters(), lr = 0.01))
+#loss['mlp_relu'] = train_model(model_relu, optim.SGD(model_relu.parameters(), lr = 0.01))
+
+
+#使用随机失活函数，对被选中的点置零，对没被选中的点乘失活概率的倒数
+#nn.Dropout函数只在训练模式下起作用，在eval模式下不起作 
+model_relu = nn.Sequential(
+    nn.Linear(784, 30), nn.ReLU(),
+    nn.Linear( 30, 20), nn.ReLU(),
+    nn.Linear( 20, 10)
+)
+ 
+
+
+
+ 
 
