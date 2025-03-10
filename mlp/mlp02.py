@@ -120,28 +120,6 @@ for t in range(max_steps):
 plt.plot(torch.tensor(lossi).view(-1, 100).mean(dim=-1))
 plt.savefig('loss_mlp02_mean.png')
 
-# # 绘制决策边界
-# h = 0.25
-# x_min, x_max = x[:, 0].min() - 1, x[:, 0].max() + 1
-# y_min, y_max = x[:, 1].min() - 1, x[:, 1].max() + 1
-# xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))    
-
-# # 将网格点展平
-# xx_flat = xx.reshape(-1)
-# yy_flat = yy.reshape(-1)
-
-# # 预测概率
-# probs = model.predict_proba(torch.tensor(np.c_[xx_flat, yy_flat]))
-
-# # 将概率转换为类别
-# preds = np.argmax(probs, axis=-1)
-
-# # 绘制决策边界
-# plt.figure(figsize=(10, 8))
-# plt.contourf(xx, yy, preds.reshape(xx.shape), alpha=0.3, cmap='viridis')
-# plt.scatter(x[:, 0], x[:, 1], c=y, cmap='viridis')
-# plt.savefig('decision_boundary_mlp02.png')
-
 
 
 
