@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 
 torch.manual_seed(12046)
 
-dataset = datasets.MNIST('./dl/cnn_mnist', train=True, download=True, transform=transforms.ToTensor())
+dataset = datasets.MNIST('./dl/cnn/cnn_mnist', train=True, download=True, transform=transforms.ToTensor())
 
 # print(dataset[0]) #格式是一个tuple，第一个元素是图片，第二个元素是标签 索引不是简单的按顺序排列的
 # print(dataset[21][0].shape) #图片是一个三维张量，第一个维度是通道数，第二三个维度是图片的高和宽
@@ -29,7 +29,7 @@ x, y = dataset[21]
 
 #plt.imshow(x.squeeze(0).numpy(), cmap='gray') 注意这里numpy一定要加括号，否则会报错
 train_set, val_set = random_split(dataset, [50000, 10000])
-test_set = datasets.MNIST('./dl/cnn_mnist', train=False, download=True, transform=transforms.ToTensor())
+test_set = datasets.MNIST('./dl/cnn/cnn_mnist', train=False, download=True, transform=transforms.ToTensor())
 
 #使用data loader 加载数据 进行封装
 #shuffle=True表示每个epoch都会打乱数据的顺序，取batch_size时是一个一个取的，所以每次取的数据都是不一样的
@@ -56,6 +56,8 @@ class MLP(nn.Module):
 '''
 #第二种方式
 #代码量少，但是不够灵活
+# 注意这里是继承的nn.sequential 类，所以只用小括号即可
+# 在MLP.py代码中，是自定义的Sequential类，所以小括号里套入[]类。
 # model = nn.Sequential(
 #     nn.Linear(784, 30), nn.Sigmoid(),
 #     nn.Linear( 30, 20), nn.Sigmoid(),
@@ -162,21 +164,67 @@ model_relu = nn.Sequential(
     nn.Linear( 30, 20), nn.ReLU(),
     nn.Linear( 20, 10)
 )
+# 加入层归一化层
+model = nn.Sequential(
+    nn.Linear(784, 30, bias=False), nn.LayerNorm(30),nn.ReLU(),
+    nn.Linear( 30, 20, bias=False), nn.LayerNorm(20), nn.ReLU(),
+    nn.Linear( 20, 10)
+)
+
 #定义优化器 并进行训练
-#loss['mlp_sigmoid'] = train_model(model_sigmoid, optim.SGD(model_sigmoid.parameters(), lr = 0.01))
-#loss['mlp_relu'] = train_model(model_relu, optim.SGD(model_relu.parameters(), lr = 0.01))
+loss['mlp_sigmoid'] = train_model(model_sigmoid, optim.SGD(model_sigmoid.parameters(), lr = 0.01))
+loss['mlp_relu'] = train_model(model_relu, optim.SGD(model_relu.parameters(), lr = 0.01))
+loss['mlp_layer_norm'] = train_model(model, optim.SGD(model.parameters(), lr = 0.01))
+
+# for i in ['mlp_sigmoid', 'mlp_relu', 'mlp_layer_norm']:
+#     plt.plot(torch.tensor(loss[i]).view(-1, 10).mean(dim=-1), label=i)
+# plt.legend()
+# plt.savefig('./dl/cnn/cnn_mlp_loss.png')
 
 
 #使用随机失活函数，对被选中的点置零，对没被选中的点乘失活概率的倒数
 #nn.Dropout函数只在训练模式下起作用，在eval模式下不起作 
-model_relu = nn.Sequential(
-    nn.Linear(784, 30), nn.ReLU(),
-    nn.Linear( 30, 20), nn.ReLU(),
+
+ 
+model = nn.Sequential(
+    nn.Linear(784, 30, bias=False), nn.LayerNorm(30),nn.ReLU(),nn.Dropout(0.2),
+    nn.Linear( 30, 20, bias=False), nn.LayerNorm(20), nn.ReLU(),nn.Dropout(0.2),
     nn.Linear( 20, 10)
 )
- 
+
+loss['mlp_relu_layer_dropout'] = train_model(model, optim.SGD(model.parameters(), lr = 0.01))
+
+for i in ['mlp_sigmoid', 'mlp_relu', 'mlp_layer_norm', 'mlp_relu_layer_dropout']:
+    plt.plot(torch.tensor(loss[i]).view(-1, 10).mean(dim=-1), label=i)
+plt.legend()
+plt.savefig('./dl/cnn/cnn_mlp_loss_dropout.png')
 
 
+def train_model_penalty(model, optimizer, epochs=10, penalty=False):
+    '''带有惩罚项的train 函数'''
+    lossi = []
+    #epochs 表示训练模型的次数, 每次使用全部数据训练一次为一轮
+    for e in range(epochs):
+        for data in train_loader:
+            inputs, labels = data
+            B, C, H, W = inputs.shape
+            logits = model(inputs.view(B, -1))
+            loss = F.cross_entropy(logits, labels)
+            lossi.append(loss.item())
+            if penalty:
+                w = torch.cat([p.view(-1) for p in model.parameters()])
+                loss += 0.001 * w.abs().sum() + 0.002 * w.square().sum()
+            optimizer.zero_grad() #梯度清零
+            loss.backward() #反向传播，计算梯度
+            optimizer.step()#获得梯度后，使用优化器更新模型参数
+        states = estimate_loss(model)
+        train_loss = f"{states['train']['loss']:.3f}"
+        #train_loss = f'{states['train']['loss']:.3f}'
+        #f-string 要使用双引号，才能用[]，否则会报错，因为f-string中的{}是用来表示变量的
+        val_loss = f"{states['val']['loss']:.3f}"
+        test_loss = f"{states['test']['loss']:.3f}"        
+        print(f"epoch {e} train {train_loss} val {val_loss} test {test_loss}")
+    return lossi
 
- 
+
 
